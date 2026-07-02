@@ -1,0 +1,8 @@
+{
+  "name": "WebMonitor",
+  "description": "Background website monitoring tool with multi-webView screenshot capabilities.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

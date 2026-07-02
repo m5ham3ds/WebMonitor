@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.example.service.MonitorManager
 import com.example.ui.theme.MyApplicationTheme
 import com.example.viewmodel.MonitorViewModel
 import java.text.SimpleDateFormat
@@ -70,10 +71,12 @@ class MainActivity : ComponentActivity() {
 fun MonitorScreen(viewModel: MonitorViewModel, modifier: Modifier = Modifier) {
     var urlInput by remember { mutableStateOf("https://example.com") }
     var instanceCountInput by remember { mutableStateOf("1") }
+    var targetOpenCountInput by remember { mutableStateOf("10") }
 
     val isRunning by viewModel.isRunning.collectAsState()
     val isPaused by viewModel.isPaused.collectAsState()
     val screenshotsMap by viewModel.screenshots.collectAsState()
+    val completedCount by viewModel.completedCount.collectAsState()
 
     val screenshotsList = screenshotsMap.values.toList().sortedBy { it.instanceId }
 
@@ -91,7 +94,7 @@ fun MonitorScreen(viewModel: MonitorViewModel, modifier: Modifier = Modifier) {
         )
         
         Text(
-            text = "ملاحظة للأمان: تم تحديد أقصى عدد لـ N بـ 5 وتطبيق تأخير بين الطلبات لحماية موارد الجهاز والخوادم.",
+            text = "ملاحظة للأمان: تم تحديد أقصى عدد لـ N بـ 10 وتطبيق تأخير بين الطلبات لحماية موارد الجهاز والخوادم.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error,
             modifier = Modifier.padding(bottom = 16.dp)
@@ -115,6 +118,16 @@ fun MonitorScreen(viewModel: MonitorViewModel, modifier: Modifier = Modifier) {
             enabled = !isRunning
         )
 
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = targetOpenCountInput,
+            onValueChange = { targetOpenCountInput = it.filter { char -> char.isDigit() } },
+            label = { Text("العدد الإجمالي لفتح الموقع") },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isRunning
+        )
+
         Spacer(modifier = Modifier.height(16.dp))
 
         Row(
@@ -123,10 +136,12 @@ fun MonitorScreen(viewModel: MonitorViewModel, modifier: Modifier = Modifier) {
         ) {
             if (!isRunning) {
                 Button(onClick = {
-                    // Maximum cap at 5 to avoid out-of-memory and adhere to safety policy 
-                    val count = instanceCountInput.toIntOrNull()?.coerceIn(1, 5) ?: 1
+                    // Maximum cap at 10 to avoid out-of-memory and adhere to safety policy 
+                    val count = instanceCountInput.toIntOrNull()?.coerceIn(1, 10) ?: 1
+                    val targetCount = targetOpenCountInput.toIntOrNull()?.coerceAtLeast(1) ?: 10
                     instanceCountInput = count.toString()
-                    viewModel.startMonitoring(urlInput, count)
+                    targetOpenCountInput = targetCount.toString()
+                    viewModel.startMonitoring(urlInput, count, targetCount)
                 }) {
                     Text("بدء المعالجة")
                 }
@@ -153,7 +168,7 @@ fun MonitorScreen(viewModel: MonitorViewModel, modifier: Modifier = Modifier) {
 
         if (isRunning) {
             Text(
-                text = "الخدمة تعمل في الخلفية...",
+                text = "الخدمة تعمل في الخلفية... ($completedCount تم فتحها من أصل ${MonitorManager.targetOpenCount})",
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold
             )
@@ -191,7 +206,7 @@ fun ScreenshotCard(data: com.example.service.ScreenshotData) {
                     .padding(8.dp)
             ) {
                 Text(
-                    text = "اكتمل التحميل – نافذة ${data.instanceId + 1} | الوقت: $timeString",
+                    text = "النافذة ${data.instanceId + 1} | الوقت: $timeString",
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Bold
                 )

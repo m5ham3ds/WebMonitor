@@ -13,10 +13,13 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
     val isRunning: StateFlow<Boolean> = MonitorManager.isRunning
     val isPaused: StateFlow<Boolean> = MonitorManager.isPaused
     val screenshots: StateFlow<Map<Int, ScreenshotData>> = MonitorManager.screenshots
+    val completedCount: StateFlow<Int> = MonitorManager.completedCount
 
-    fun startMonitoring(url: String, instanceCount: Int) {
+    fun startMonitoring(url: String, instanceCount: Int, targetOpenCount: Int) {
         MonitorManager.urlToLoad = url
         MonitorManager.instanceCount = instanceCount
+        MonitorManager.targetOpenCount = targetOpenCount
+        MonitorManager.completedCount.value = 0
         
         val context = getApplication<Application>().applicationContext
         val intent = Intent(context, WebMonitorService::class.java).apply {

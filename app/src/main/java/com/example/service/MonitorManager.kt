@@ -20,6 +20,8 @@ object MonitorManager {
     val isPaused = MutableStateFlow(false)
     var urlToLoad = ""
     var instanceCount = 1
+    var targetOpenCount = 1
+    val completedCount = MutableStateFlow(0)
 
     fun updateScreenshot(data: ScreenshotData) {
         _screenshots.update { currentMap ->

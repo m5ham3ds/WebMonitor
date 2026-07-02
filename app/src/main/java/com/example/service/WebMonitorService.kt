@@ -26,6 +26,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 
 class WebMonitorService : Service() {
@@ -127,35 +128,34 @@ class WebMonitorService : Service() {
                     continue
                 }
 
+                if (MonitorManager.completedCount.value >= MonitorManager.targetOpenCount) {
+                    MonitorManager.isRunning.value = false
+                    break
+                }
+
+                // Clear cookies/data to start fresh
+                withContext(Dispatchers.Main) {
+                    android.webkit.CookieManager.getInstance().removeAllCookies(null)
+                    android.webkit.CookieManager.getInstance().flush()
+                    webView.clearCache(true)
+                    webView.clearHistory()
+                }
+
                 try {
-                    // Load the URL and wait for it to finish
-                    val success = loadUrlAndWait(webView, url)
+                    val success = loadUrlAndWaitWithProgress(webView, url, instanceId)
                     if (success) {
-                        // Small delay to allow any post-load rendering/animations to settle
-                        delay(2000)
-                        
-                        val bitmap = captureScreenshot(webView)
-                        if (bitmap != null) {
-                            MonitorManager.updateScreenshot(
-                                ScreenshotData(
-                                    instanceId = instanceId,
-                                    bitmap = bitmap,
-                                    timestamp = System.currentTimeMillis()
-                                )
-                            )
-                        }
+                        MonitorManager.completedCount.update { it + 1 }
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
 
-                // Wait before next request to avoid spamming and OOM
-                delay(10000)
+                delay(1000)
             }
         }
     }
 
-    private suspend fun loadUrlAndWait(webView: WebView, url: String): Boolean = suspendCancellableCoroutine { cont ->
+    private suspend fun loadUrlAndWaitWithProgress(webView: WebView, url: String, instanceId: Int): Boolean = suspendCancellableCoroutine { cont ->
         var isFinished = false
         var progress100 = false
         var hasResumed = false
@@ -200,7 +200,40 @@ class WebMonitorService : Service() {
 
         webView.loadUrl(url)
         
+        // Polling screenshot just in case onProgressChanged isn't called enough
+        val pollJob = serviceScope.launch {
+            while (!hasResumed && isActive) {
+                val bitmap = captureScreenshot(webView)
+                if (bitmap != null) {
+                    MonitorManager.updateScreenshot(
+                        ScreenshotData(
+                            instanceId = instanceId,
+                            bitmap = bitmap,
+                            timestamp = System.currentTimeMillis()
+                        )
+                    )
+                }
+                delay(1000) // Capture every 1 second
+            }
+            
+            // Final screenshot when finished successfully
+            if (isFinished && progress100) {
+                delay(1000)
+                val bitmap = captureScreenshot(webView)
+                if (bitmap != null) {
+                    MonitorManager.updateScreenshot(
+                        ScreenshotData(
+                            instanceId = instanceId,
+                            bitmap = bitmap,
+                            timestamp = System.currentTimeMillis()
+                        )
+                    )
+                }
+            }
+        }
+
         cont.invokeOnCancellation {
+            pollJob.cancel()
             handler.post { webView.stopLoading() }
         }
     }
